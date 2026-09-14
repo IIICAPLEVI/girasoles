@@ -1,0 +1,9 @@
+{
+  "name": "girasoles",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Campo de girasoles animado con canvas — detalle romántico (HTML + JS vanilla, cero dependencias)",
+  "scripts": {
+    "test": "node test/girasoles.test.js"
+  }
+}

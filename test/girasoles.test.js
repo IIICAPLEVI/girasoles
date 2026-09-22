@@ -1,78 +1,60 @@
-const fs = require('fs');
-const path = require('path');
-const vm = require('vm');
+/* Tests del sitio: estructura del proyecto, mensajes y piezas clave del motor.
+   `pretest` compila con Vite, así que aquí también validamos el build final. */
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const file = path.join(__dirname, '..', 'index.html');
-const html = fs.readFileSync(file, 'utf8');
-
+const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 let failures = 0;
 function check(name, cond, detail) {
   if (cond) console.log('  \u2714 ' + name);
   else { console.error('  \u2718 ' + name + (detail ? ' \u2192 ' + detail : '')); failures++; }
 }
+const read = (p) => fs.readFileSync(path.join(root, p), 'utf8');
 
-console.log('\u25b6 girasoles \u2014 tests');
+console.log('\u25b6 girasoles \u2014 tests (React + Vite)');
 
-/* 1) estructura b\u00e1sica del HTML */
-check('index.html existe y no vac\u00edo', html.length > 5000, 'longitud=' + html.length);
+/* 1) HTML de entrada */
+const html = read('index.html');
 check('meta viewport presente (responsive m\u00f3vil)', /name="viewport"/.test(html));
 check('charset UTF-8', /charset="UTF-8"/.test(html));
-check('theme-color negro', /#000000/.test(html));
-check('touch-action none (evita scroll al tocar)', /touch-action:\s*none/.test(html));
+check('t\u00edtulo con girasol', /\ud83c\udf3b/.test(html));
 
-/* 2) carta de apertura (antes de la animaci\u00f3n) */
-check('carta de apertura presente', /id="letter"/.test(html));
-check('carta dice "Feliz 21 de Septiembre"', /Feliz 21 de Septiembre/.test(html));
-check('carta: "no te puedo ver hoy"', /no te puedo ver hoy/i.test(html));
-check('bot\u00f3n para abrir la experiencia', /id="abrir"/.test(html));
+/* 2) carta y mensajes */
+const config = read('src/config.ts');
+check('carta para Chezy', /Para Chezy/.test(config));
+check('carta: "Feliz 21 de Septiembre"', /Feliz 21 de Septiembre/.test(config));
+check('carta: "no te puedo ver hoy"', /no te puedo ver hoy/i.test(config));
+check('mensaje final "Para Chezy \u2665"', /Para Chezy \u2665/.test(config));
+check('sin firma "con todo mi coraz\u00f3n" (se quit\u00f3)', !/con todo mi coraz\u00f3n/.test(config));
 
-/* 3) extraer el JS embebido y validar sintaxis */
-const scriptMatch = html.match(/<script>([\s\S]*?)<\/script>/);
-check('bloque <script> presente', !!scriptMatch);
-if (scriptMatch) {
-  const js = scriptMatch[1];
-  try {
-    new vm.Script(js, { filename: 'index-inline.js' });
-    check('sintaxis JS v\u00e1lida', true);
-  } catch (e) {
-    check('sintaxis JS v\u00e1lida', false, e.message);
-  }
+/* 3) motor del ramo: sin hojas alrededor del ramo */
+const bouquet = read('src/engine/bouquet.ts');
+check('ramo: cabezas definidas', /HEADS_DEF/.test(bouquet));
+check('ramo: tallos visibles', /drawStem/.test(bouquet));
+check('ramo: list\u00f3n con mo\u00f1o', /drawRibbon/.test(bouquet));
+check('ramo: SIN hojas decorativas (LEAF_DEFS eliminado)', !/LEAF_DEFS/.test(bouquet));
+check('ramo: SIN drawLeaf', !/drawLeaf/.test(bouquet));
+check('ramo: SIN array de leaves', !/leaves\s*:/.test(bouquet));
+check('optimizaci\u00f3n: sprites horneados por cabeza', /bakePetal/.test(bouquet) && /bakeDisc/.test(bouquet));
+check('optimizaci\u00f3n: capa est\u00e1tica horneada', /bakeStatic/.test(bouquet));
 
-  /* mensaje y personalizaci\u00f3n */
-  check('mensaje para "Chezy"', /Para Chezy/.test(js));
-  check('bloque de personalizaci\u00f3n CONFIG presente', /PERSONALIZA AQU\u00cd/.test(js));
-  check('canvas #c referenciado', /getElementById\('c'\)/.test(js));
+/* 4) texto final: firma opcional */
+const text = read('src/engine/text.ts');
+check('texto: firma opcional', /if \(msg\.firma\)/.test(text));
 
-  /* 4) no debe quedar c\u00f3digo de diagn\u00f3stico/test */
-  check('sin modo ?test residual', !js.includes('__advance') && !js.includes("has('test')"));
-
-  /* 5) piezas clave de la animaci\u00f3n */
-  for (const piece of [
-    'const GA',                    // \u00e1ngulo dorado (espiral de semillas)
-    'buildField',                  // campo de girasoles
-    'layoutBouquet',               // armado del ramo central
-    'drawBouquet',                 // dibujo del ramo
-    'drawStars',                   // estrellas
-    'drawFireflies',               // luci\u00e9rnagas
-    'spawnHearts',                 // corazones al hacer clic
-    'requestAnimationFrame(frame)' // bucle de animaci\u00f3n
-  ]) {
-    check('contiene ' + piece, js.includes(piece));
-  }
-
-  /* 6) rendimiento: corazones optimizados (sin lag) */
-  check('corazones pre-renderizados (sprites)', js.includes('makeHeartSprite'));
-  check('tope de part\u00edculas (evita el lag)', js.includes('MAX_PARTS'));
-
-  /* 7) accesibilidad */
-  check('respeta prefers-reduced-motion', /prefers-reduced-motion/.test(js));
-
-  /* 8) dise\u00f1o responsive: ramas para pantalla vertical */
-  check('layout responsive m\u00f3vil (H > W*1.2)', js.includes('H > W*1.2'));
+/* 5) sin restos de desarrollo en el motor */
+for (const f of ['src/engine/bouquet.ts', 'src/engine/text.ts', 'src/engine/scene.ts', 'src/engine/field.ts']) {
+  check('sin restos de desarrollo en ' + f, !/TODO|FIXME|console\.log\(/.test(read(f)));
 }
 
-/* 9) dependencias externas: debe ser autocontenido */
-const externalSrc = html.match(/<script[^>]+src=|<link[^>]+href=(?!"data:|icon)/g);
-check('sin dependencias externas (funciona offline)', !externalSrc, JSON.stringify(externalSrc));
+/* 6) build de producci\u00f3n (un solo archivo) */
+const dist = path.join(root, 'dist', 'index.html');
+check('dist/index.html existe (corre `npm run build`)', fs.existsSync(dist));
+if (fs.existsSync(dist)) {
+  const d = read('dist/index.html');
+  check('build: mensaje para Chezy presente', /Para Chezy/.test(d));
+  check('build: todo inline (singlefile)', !/<script[^>]+src=/.test(d));
+}
 
 process.exit(failures ? 1 : 0);

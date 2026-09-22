@@ -5,15 +5,17 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"/>
 <meta name="theme-color" content="#000000"/>
 <title>🌻 Para Chezy</title>
+<meta name="description" content="Un campo de girasoles bajo las estrellas, con todo mi corazón."/>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌻</text></svg>"/>
 <style>
-  html,body{margin:0;padding:0;width:100%;height:100%;background:#000;overflow:hidden}
-  #c{display:block;width:100vw;height:100vh;touch-action:none}
+  html,body{margin:0;padding:0;width:100%;height:100%;background:#000;overflow:hidden;
+            -webkit-tap-highlight-color:transparent;overscroll-behavior:none}
+  #c{display:block;width:100vw;height:100vh;touch-action:none;cursor:crosshair}
 
   /* ── carta de apertura ───────────────────────────── */
   #letter{position:fixed;inset:0;z-index:10;display:flex;align-items:center;justify-content:center;
           padding:22px;box-sizing:border-box;
-          background:radial-gradient(ellipse at 50% 42%, rgba(64,46,14,.40), rgba(0,0,0,.94) 72%);
+          background:radial-gradient(ellipse at 50% 42%, rgba(64,46,14,.40), rgba(0,0,0,.95) 72%);
           transition:opacity 1.1s ease, visibility 1.1s ease}
   #letter.hidden{opacity:0;visibility:hidden;pointer-events:none}
   .card{position:relative;width:min(92vw,540px);box-sizing:border-box;
@@ -53,7 +55,17 @@
         color:rgba(255,220,150,.55);font:italic 14px/1.6 Georgia,'Times New Roman',serif;
         letter-spacing:.14em;pointer-events:none;opacity:0;transition:opacity 1.8s ease}
   #hint.show{opacity:1}
-  @media (prefers-reduced-motion:reduce){ .card{animation:none} }
+
+  /* barrita de "cargando el regalo" mientras el click hornea los sprites */
+  #loading{position:fixed;inset:0;z-index:9;display:none;align-items:center;justify-content:center;
+           flex-direction:column;gap:14px;background:rgba(0,0,0,.55);pointer-events:none;
+           opacity:0;transition:opacity .35s ease}
+  #loading.show{display:flex;opacity:1}
+  #loading .sun{font-size:34px;animation:pulseS 1s ease-in-out infinite}
+  #loading span{color:rgba(255,220,150,.8);font:italic 15px Georgia,serif;letter-spacing:.08em}
+  @keyframes pulseS{0%,100%{transform:scale(1)}50%{transform:scale(1.25)}}
+
+  @media (prefers-reduced-motion:reduce){ .card,#loading .sun{animation:none} }
 </style>
 </head>
 <body>
@@ -69,6 +81,8 @@
   </div>
 </div>
 
+<div id="loading"><div class="sun">🌻</div><span>preparando tu regalo…</span></div>
+
 <div id="hint">haz clic para esparcir un poco de amor ✧</div>
 
 <script>
@@ -83,10 +97,11 @@ const CONFIG = {
 /* ═════════════════════════════════════════════ */
 
 const cv    = document.getElementById('c');
-const ctx   = cv.getContext('2d');
+const ctx   = cv.getContext('2d', { alpha: false });   // opaco ⇒ composición más barata
 const hint  = document.getElementById('hint');
 const carta = document.getElementById('letter');
 const btn   = document.getElementById('abrir');
+const load  = document.getElementById('loading');
 
 /* ---------- utilidades ---------- */
 const TAU = Math.PI * 2;
@@ -203,7 +218,7 @@ function makeSprite(R,palIdx){
   const cx=w/2, headY=pad+R, baseY=h-1;
   const pal=PALS[palIdx];
   g.globalCompositeOperation='lighter'; g.globalAlpha=0.55;
-  g.drawImage(SPR.GOLD, cx-R*2.05, headY-R*2.05, R*4.1, R*4.1);
+  g.drawImage(SPR.GOLD, cx-R*2.05, headY-R*2.2, R*4.1, R*4.1);
   g.globalAlpha=1; g.globalCompositeOperation='source-over';
   const bend=rnd(-0.22,0.22)*R;
   g.strokeStyle='#2e6b20'; g.lineCap='round';
@@ -523,7 +538,7 @@ function drawWrapBack(p){
   ctx.beginPath();
   ctx.moveTo(cx-1.80*R0, tEdge);
   ctx.quadraticCurveTo(cx-0.86*R0, tMid, cx-0.42*R0, cy+1.92*R0);
-  ctx.quadraticCurveTo(cx-0.20*R0, yBot, cx, yBot);
+
   ctx.quadraticCurveTo(cx+0.20*R0, yBot, cx+0.42*R0, cy+1.92*R0);
   ctx.quadraticCurveTo(cx+0.86*R0, tMid, cx+1.80*R0, tEdge);
   ctx.quadraticCurveTo(cx, cy+0.62*R0, cx-1.80*R0, tEdge);
@@ -660,14 +675,11 @@ function drawBouquet(t){
   const cx=BQ.cx, cy=BQ.cy, R0=BQ.R0;
   if(t<=TB.stemStart) return;
   const bloom=easeInOutCubic(clamp((t-TB.stemStart)/(TB.burstAt-TB.stemStart),0,1));
-
   ctx.save(); ctx.globalCompositeOperation='lighter';
   const pulse=0.86+0.14*Math.sin(t*1.7);
   glowAt(cx, cy-0.35*R0, R0*9.5, (0.045+bloom*0.085)*pulse, SPR.AMBER);
   ctx.restore(); ctx.globalAlpha=1;
 
-  /* 1) tallos internos  2) papel trasero  3) hojas  4) tallos visibles
-     5) respiración  6) flores  7) solapas+cinta+moño                     */
   for(let i=0;i<BQ.heads.length;i++)
     drawStem(BQ.heads[i], easeInOutCubic(clamp((t-(TB.stemStart+i*0.05))/TB.stem,0,1)));
 
@@ -947,10 +959,12 @@ function drawText(t,at){
   const a=easeOutCubic(clamp((t-TB.textAt)/1.6,0,1));
   if(a<=0) return;
   const vert=H>W*1.2;
-  const y=(vert?H*0.105:H*0.135)+Math.sin(at*0.8)*5;
+  const y=(vert?H*0.115:H*0.135)+Math.sin(at*0.8)*5;
+  const s=Math.min(1,(W*0.94)/textSpr.width);      // nunca recortar en pantallas angostas
+  const w=textSpr.width*s, h=textSpr.height*s;
   ctx.save();
   ctx.globalAlpha=a;
-  ctx.drawImage(textSpr, W/2-textSpr.width/2, y-textSpr.height/2);
+  ctx.drawImage(textSpr, W/2-w/2, y-h/2, w, h);
   ctx.restore(); ctx.globalAlpha=1;
 }
 
@@ -959,12 +973,19 @@ let hintShown=false, lastMove=0;
 function hideHint(){ hint.classList.remove('show'); }
 function openExperience(){
   if(phase!=='letter') return;
-  phase='field';
-  carta.classList.add('hidden');
-  setTimeout(()=>{ if(carta.parentNode) carta.parentNode.removeChild(carta); }, 1300);
-  if(REDUCED) animT=TB.textAt+2.0;
-  setTimeout(()=>{ if(phase==='field') hint.classList.add('show'); }, REDUCED?900:9000);
-  setTimeout(()=>hideHint(), REDUCED?20000:26000);
+  phase='baking';
+  load.classList.add('show');
+  /* ceder el hilo 2 frames para que el overlay pinte ANTES del horneado */
+  requestAnimationFrame(()=>requestAnimationFrame(()=>{
+    layoutBouquet(); buildField(); buildStars(); buildFireflies(); buildPollen(); bakeText();
+    phase='field';
+    load.classList.remove('show');
+    carta.classList.add('hidden');
+    setTimeout(()=>{ if(carta.parentNode) carta.parentNode.removeChild(carta); }, 1300);
+    if(REDUCED) animT=TB.textAt+2.0;
+    setTimeout(()=>{ if(phase==='field') hint.classList.add('show'); }, REDUCED?900:9000);
+    setTimeout(()=>hideHint(), REDUCED?20000:26000);
+  }));
 }
 btn.addEventListener('click',openExperience);
 carta.addEventListener('click',e=>{ if(e.target===carta) openExperience(); });
@@ -997,7 +1018,9 @@ function resize(){
   cv.width=Math.round(W*DPR); cv.height=Math.round(H*DPR);
   ctx.setTransform(DPR,0,0,DPR,0,0);
   for(const k in spriteCache) delete spriteCache[k];
-  layoutBouquet(); buildField(); buildStars(); buildFireflies(); buildPollen(); bakeText();
+  if(phase!=='letter'){
+    layoutBouquet(); buildField(); buildStars(); buildFireflies(); buildPollen(); bakeText();
+  }
 }
 window.addEventListener('resize',resize);
 resize();
@@ -1022,12 +1045,12 @@ function frame(ms){
   drawBG(at,bloom);
   drawStars(at);
   drawShoot(at,dt);
-  drawField(animT,bloom);
+  if(phase!=='letter') drawField(animT,bloom);
   drawFireflies(at,dt);
-  drawBouquet(animT);
+  if(phase!=='letter') drawBouquet(animT);
   drawPollen(at,dt);
   drawParts(dt);
-  drawText(animT,at);
+  if(phase!=='letter') drawText(animT,at);
   raf=requestAnimationFrame(frame);
 }
 raf=requestAnimationFrame(frame);
